@@ -1,13 +1,25 @@
+// speedtest-render/pages/api/download.js
+// MODIFIED: Now accepts a 'size' query parameter to determine download size.
 import { Readable } from 'stream';
 import crypto from 'crypto';
 
-const DOWNLOAD_SIZE_MB = 10; // Size of data to send in MB
+const DEFAULT_DOWNLOAD_SIZE_MB = 10; // Default size if not specified or invalid
+const MAX_DOWNLOAD_SIZE_MB = 500;   // A reasonable safety limit
 const BYTES_PER_MB = 1024 * 1024;
-const TOTAL_BYTES = DOWNLOAD_SIZE_MB * BYTES_PER_MB;
-const CHUNK_SIZE_BYTES = 128 * 1024; // 128KB chunks - adjust as needed
+const CHUNK_SIZE_BYTES = 128 * 1024;
 
 export default function handler(req, res) {
   if (req.method === 'GET') {
+    // Determine download size from the query parameter
+    let requestedSizeMB = parseInt(req.query.size, 10);
+
+    // Validate the requested size, fallback to default if invalid
+    if (isNaN(requestedSizeMB) || requestedSizeMB <= 0 || requestedSizeMB > MAX_DOWNLOAD_SIZE_MB) {
+      requestedSizeMB = DEFAULT_DOWNLOAD_SIZE_MB;
+    }
+    
+    const TOTAL_BYTES = requestedSizeMB * BYTES_PER_MB;
+
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Length', TOTAL_BYTES.toString());
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -29,26 +41,18 @@ export default function handler(req, res) {
         // Generate random bytes for the chunk
         const chunk = crypto.randomBytes(currentChunkSize);
         
-        // Push the chunk to the stream
         if (this.push(chunk)) {
           bytesSent += currentChunkSize;
         } else {
-          // If push returns false, it means the internal buffer is full.
-          // The stream will pause until it's consumed.
-          // For this basic implementation, we continue adding bytesSent
-          // as the piping mechanism handles backpressure.
           bytesSent += currentChunkSize;
         }
       }
     });
 
-    // Pipe the readable stream to the response
     readableStream.pipe(res);
 
-    // Handle client closing connection prematurely
     req.on('close', () => {
       readableStream.destroy();
-      // console.log('Download stream destroyed due to client disconnect.');
     });
 
   } else {
