@@ -1,5 +1,5 @@
 // speedtest-render/pages/index.js
-// MODIFIED: UI simplified to a single "Start Test" button.
+// MODIFIED: Logic to offer larger tests based on performance is confirmed and highlighted.
 import Head from 'next/head';
 import { useState, useCallback } from 'react';
 
@@ -32,8 +32,6 @@ export default function HomePage() {
   };
 
   const measureDownloadSpeed = useCallback(async (sizeMB = INITIAL_DOWNLOAD_SIZE_MB) => {
-    // This logic remains the same, but it's now only called from runAllTests
-    // or the dynamic high-speed button.
     if (isTestingDownload) return;
     setIsTestingDownload(true);
     setDownloadSpeed('Testing...');
@@ -72,11 +70,13 @@ export default function HomePage() {
       const speedMbps = (receivedBytes * 8) / (durationSeconds * 1000 * 1000);
       setDownloadSpeed(`${speedMbps.toFixed(2)} Mbps`);
 
+      // LOGIC FOR DYNAMIC TEST SIZE:
+      // After an initial test, check the speed. If it's high, offer a larger, more accurate test.
       if (sizeMB === INITIAL_DOWNLOAD_SIZE_MB) {
         if (speedMbps > 250) {
-          setLargeTestSize(250);
+          setLargeTestSize(250); // Offer 250MB test for speeds > 250 Mbps
         } else if (speedMbps > 100) {
-          setLargeTestSize(50);
+          setLargeTestSize(50); // Offer 50MB test for speeds > 100 Mbps
         } else {
           setLargeTestSize(null);
         }
