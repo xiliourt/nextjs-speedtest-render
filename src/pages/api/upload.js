@@ -1,84 +1,79 @@
-// File: functions/api/upload.js
-// Receives data uploaded by the client for upload speed testing.
-// Accessed via /api/upload
+// File: functions/api/download.js
+// Streams a configurable amount of data for download speed testing.
+// Accessed via /api/download?size=<bytes>
 
-// Handler for POST requests
-export async function onRequestPost(context) {
-  const { request } = context; // Get the request from the context
+export async function onRequestGet(context) {
+  const { request } = context;
+  const url = new URL(request.url);
+  const requestedSize = url.searchParams.get('size');
+
+  // --- Configuration ---
+  // Default size if no 'size' parameter is provided or if it's invalid
+  const DEFAULT_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+  const MIN_FILE_SIZE_BYTES = 1 * 1024; // 1 KB
+  const MAX_FILE_SIZE_BYTES = 1000 * 1024 * 1024; // 50 MB (Adjust as needed for your limits)
+
+  let fileSize = DEFAULT_FILE_SIZE_BYTES;
+
+  if (requestedSize) {
+    const parsedSize = parseInt(requestedSize, 10);
+    if (!isNaN(parsedSize) && parsedSize >= MIN_FILE_SIZE_BYTES && parsedSize <= MAX_FILE_SIZE_BYTES) {
+      fileSize = parsedSize;
+    } else {
+      // Optionally, you could return an error for invalid size parameter
+      // For now, it falls back to default.
+      console.log(`Invalid or out-of-range size parameter received: ${requestedSize}. Using default size.`);
+    }
+  }
+
+  // --- End Configuration ---
+
+  let bytesSent = 0;
+  const chunkSize = 64 * 1024; // 64KB
 
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*', // Or specify your frontend domain
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  if (!request.body) {
-    return new Response(JSON.stringify({ message: 'Request body is missing.' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  try {
-    let byteCount = 0;
-    // Use the new way to get a reader from the request body if available,
-    // or fall back to the older way for broader compatibility if needed.
-    const reader = request.body.getReader();
-
-    // Consume the stream to count the bytes.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break; // Stream finished.
+  const readableStream = new ReadableStream({
+    pull(controller) {
+      if (bytesSent >= fileSize) {
+        controller.close();
+        return;
       }
-      if (value) {
-        byteCount += value.length;
+      const bytesToSend = Math.min(chunkSize, fileSize - bytesSent);
+      const chunk = new Uint8Array(bytesToSend);
+      // Fill the chunk with some dummy data (e.g., character 'a')
+      for (let i = 0; i < bytesToSend; i++) {
+        chunk[i] = 97; // ASCII for 'a'
       }
+      controller.enqueue(chunk);
+      bytesSent += bytesToSend;
+    },
+    cancel(reason) {
+      console.log('Download stream cancelled:', reason);
     }
-    
-    return new Response(JSON.stringify({ message: 'Upload received successfully.', bytesReceived: byteCount }), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-      },
-    });
-  } catch (error) {
-    console.error('Error processing upload stream:', error);
-    return new Response(JSON.stringify({ message: 'Failed to process upload stream.', error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  });
+
+  return new Response(readableStream, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': fileSize.toString(), // Crucial: Reflects the actual size being sent
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+    },
+  });
 }
 
-// Handler for OPTIONS preflight requests
 export async function onRequestOptions(context) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*', // Or specify your frontend domain
-      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', // Add GET if you also have a GET handler
-      'Access-Control-Allow-Headers': 'Content-Type', // Or be more specific if needed
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
     };
     return new Response(null, { headers: corsHeaders });
 }
-
-// If you need to handle other methods like GET for the same /api/upload path:
-// export async function onRequestGet(context) {
-//   // ... your GET logic ...
-//   return new Response('This is GET /api/upload', { status: 200 });
-// }
-
-// A general handler if you want one function to handle all methods for this path
-// export async function onRequest(context) {
-//   if (context.request.method === "POST") {
-//     return await onRequestPost(context);
-//   }
-//   if (context.request.method === "OPTIONS") {
-//     return await onRequestOptions(context);
-//   }
-//   // Handle other methods or return 405
-//   return new Response("Method not allowed", { status: 405 });
-// }
