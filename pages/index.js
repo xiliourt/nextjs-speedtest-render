@@ -1,5 +1,5 @@
 // speedtest-render/pages/index.js
-// MODIFIED: Logic added to offer larger download tests based on performance.
+// MODIFIED: UI simplified to a single "Start Test" button.
 import Head from 'next/head';
 import { useState, useCallback } from 'react';
 
@@ -32,12 +32,13 @@ export default function HomePage() {
   };
 
   const measureDownloadSpeed = useCallback(async (sizeMB = INITIAL_DOWNLOAD_SIZE_MB) => {
+    // This logic remains the same, but it's now only called from runAllTests
+    // or the dynamic high-speed button.
     if (isTestingDownload) return;
     setIsTestingDownload(true);
     setDownloadSpeed('Testing...');
     setErrorMessage('');
 
-    // If this is an initial test, clear any previous large test options
     if (sizeMB === INITIAL_DOWNLOAD_SIZE_MB) {
         setLargeTestSize(null);
     }
@@ -71,14 +72,13 @@ export default function HomePage() {
       const speedMbps = (receivedBytes * 8) / (durationSeconds * 1000 * 1000);
       setDownloadSpeed(`${speedMbps.toFixed(2)} Mbps`);
 
-      // After an initial test, check if we should offer a larger test
       if (sizeMB === INITIAL_DOWNLOAD_SIZE_MB) {
         if (speedMbps > 250) {
           setLargeTestSize(250);
         } else if (speedMbps > 100) {
           setLargeTestSize(50);
         } else {
-          setLargeTestSize(null); // Clear if speed is low
+          setLargeTestSize(null);
         }
       }
 
@@ -165,13 +165,6 @@ export default function HomePage() {
     await measureUploadSpeed();
   };
   
-  const getButtonClass = (isLoading) => 
-    `px-6 py-3 rounded-lg font-semibold transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-opacity-50
-    ${isLoading 
-      ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-      : 'bg-sky-500 hover:bg-sky-600 active:bg-sky-700 text-white focus:ring-sky-400'
-    }`;
-  
   const getResultClass = (value) => {
     if (value === 'Testing...') return 'text-yellow-400 animate-pulseSlow';
     if (value === 'Error' || value === 'Skipped') return 'text-red-400';
@@ -197,15 +190,17 @@ export default function HomePage() {
             <div className="bg-gray-700 p-6 rounded-lg shadow-md"><h2 className="text-xl font-semibold text-sky-300 mb-1">Download</h2><p className={`text-3xl font-bold ${getResultClass(downloadSpeed)}`}>{downloadSpeed}</p></div>
             <div className="bg-gray-700 p-6 rounded-lg shadow-md"><h2 className="text-xl font-semibold text-sky-300 mb-1">Upload</h2><p className={`text-3xl font-bold ${getResultClass(uploadSpeed)}`}>{uploadSpeed}</p></div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <button onClick={measurePing} disabled={anyTestRunning} className={getButtonClass(isTestingPing)}>{isTestingPing ? 'Pinging...' : 'Test Ping'}</button>
-            <button onClick={() => measureDownloadSpeed()} disabled={anyTestRunning} className={getButtonClass(isTestingDownload)}>{isTestingDownload ? 'Downloading...' : `Test Download (${INITIAL_DOWNLOAD_SIZE_MB}MB)`}</button>
-            <button onClick={measureUploadSpeed} disabled={anyTestRunning} className={getButtonClass(isTestingUpload)}>{isTestingUpload ? 'Uploading...' : `Test Upload (${UPLOAD_SIZE_MB}MB)`}</button>
-            <button onClick={runAllTests} disabled={anyTestRunning} className={`${getButtonClass(anyTestRunning)} bg-green-500 hover:bg-green-600 active:bg-green-700 focus:ring-green-400`}>{anyTestRunning ? 'Testing All...' : 'Test All'}</button>
+          
+          <div className="my-8 text-center">
+            <button
+              onClick={runAllTests}
+              disabled={anyTestRunning}
+              className="px-8 py-4 rounded-lg font-bold text-lg transition-all duration-200 ease-in-out focus:outline-none focus:ring-4 focus:ring-opacity-75 transform hover:scale-105 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white focus:ring-green-400 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              {anyTestRunning ? 'Testing...' : 'Start Test'}
+            </button>
           </div>
-          <div className="text-center">
-            <button onClick={resetResults} disabled={anyTestRunning} className="text-sm text-gray-500 hover:text-sky-400 transition-colors disabled:text-gray-600 disabled:cursor-not-allowed">Reset Results</button>
-          </div>
+          
           {largeTestSize && !anyTestRunning && (
             <div className="mt-8 text-center">
                 <button
@@ -216,6 +211,11 @@ export default function HomePage() {
                 </button>
             </div>
           )}
+
+          <div className="mt-6 text-center">
+            <button onClick={resetResults} disabled={anyTestRunning} className="text-sm text-gray-500 hover:text-sky-400 transition-colors disabled:text-gray-600 disabled:cursor-not-allowed">Reset Results</button>
+          </div>
+
           <footer className="mt-10 text-center text-xs text-gray-500">
             <p>Initial download test sends {INITIAL_DOWNLOAD_SIZE_MB}MB from server. Upload test sends {UPLOAD_SIZE_MB}MB from client.</p>
             <p>Results may vary based on network conditions and server load.</p>
